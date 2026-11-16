@@ -1,14 +1,3 @@
-/* =========================================================================================
-   TRABAJO PRÁCTICO INTEGRADOR - INGENIERÍA DE DATOS I (5101) - UADE
-   GRUPO 4: AeroNexo S.A. ("Sin sorpresas. Un vuelo seguro.")
-   SCRIPT 1: CREACIÓN DE TABLAS (DDL - CREATE TABLE)
-   ========================================================================================= */
-
-/* =========================================================================================
-   1. CREACIÓN DE TABLAS (CREATE TABLE)
-   ========================================================================================= */
-
--- 1.1 Tabla AEROPUERTO
 CREATE TABLE AEROPUERTO (
     id_aeropuerto INT PRIMARY KEY,
     codigo_iata   CHAR(3) NOT NULL UNIQUE,
@@ -18,7 +7,6 @@ CREATE TABLE AEROPUERTO (
     es_hub        BIT NOT NULL
 );
 
--- 1.2 Tabla RUTA (Doble FK a AEROPUERTO y CHECK de origen <> destino)
 CREATE TABLE RUTA (
     id_ruta          INT PRIMARY KEY,
     id_aerop_origen  INT NOT NULL,
@@ -31,7 +19,6 @@ CREATE TABLE RUTA (
     CHECK (id_aerop_origen <> id_aerop_destino)
 );
 
--- 1.3 Tabla AERONAVE
 CREATE TABLE AERONAVE (
     id_aeronave        INT PRIMARY KEY,
     matricula          VARCHAR(10) NOT NULL UNIQUE,
@@ -42,7 +29,6 @@ CREATE TABLE AERONAVE (
     estado             VARCHAR(25) NOT NULL
 );
 
--- 1.4 Tabla TRIPULANTE
 CREATE TABLE TRIPULANTE (
     id_tripulante INT PRIMARY KEY,
     legajo        VARCHAR(15) NOT NULL UNIQUE,
@@ -54,7 +40,6 @@ CREATE TABLE TRIPULANTE (
     FOREIGN KEY (id_base) REFERENCES AEROPUERTO(id_aeropuerto)
 );
 
--- 1.5 Tabla VUELO (Con auto-referencia id_vuelo_previo para modelar el Efecto Dominó)
 CREATE TABLE VUELO (
     id_vuelo           INT PRIMARY KEY,
     nro_vuelo          VARCHAR(10) NOT NULL,
@@ -73,7 +58,6 @@ CREATE TABLE VUELO (
     CHECK (llegada_programada > salida_programada)
 );
 
--- 1.6 Tabla intermedia ASIGNACION_TRIPULACION (Relación N:M Vuelo-Tripulante)
 CREATE TABLE ASIGNACION_TRIPULACION (
     id_vuelo      INT NOT NULL,
     id_tripulante INT NOT NULL,
@@ -83,7 +67,6 @@ CREATE TABLE ASIGNACION_TRIPULACION (
     FOREIGN KEY (id_tripulante) REFERENCES TRIPULANTE(id_tripulante) ON DELETE CASCADE
 );
 
--- 1.7 Tabla CLIENTE_CORPORATIVO
 CREATE TABLE CLIENTE_CORPORATIVO (
     id_cliente    INT PRIMARY KEY,
     cuit          VARCHAR(13) NOT NULL UNIQUE,
@@ -92,7 +75,6 @@ CREATE TABLE CLIENTE_CORPORATIVO (
     plan_nexo_ops VARCHAR(20) NOT NULL
 );
 
--- 1.8 Tabla PASAJERO (Clave candidata compuesta: tipo_doc + nro_doc)
 CREATE TABLE PASAJERO (
     id_pasajero INT PRIMARY KEY,
     tipo_doc    VARCHAR(10) NOT NULL,
@@ -104,7 +86,6 @@ CREATE TABLE PASAJERO (
     UNIQUE (tipo_doc, nro_doc)
 );
 
--- 1.9 Tabla RESERVA (id_cliente permite NULL cuando es venta directa)
 CREATE TABLE RESERVA (
     id_reserva    INT PRIMARY KEY,
     codigo_pnr    CHAR(6) NOT NULL UNIQUE,
@@ -114,7 +95,6 @@ CREATE TABLE RESERVA (
     FOREIGN KEY (id_cliente) REFERENCES CLIENTE_CORPORATIVO(id_cliente)
 );
 
--- 1.10 Tabla PASAJE (Relación N:M Pasajero-Vuelo y guarda clase, asiento y tarifa)
 CREATE TABLE PASAJE (
     id_pasaje   INT PRIMARY KEY,
     id_reserva  INT NOT NULL,
@@ -129,7 +109,6 @@ CREATE TABLE PASAJE (
     FOREIGN KEY (id_vuelo) REFERENCES VUELO(id_vuelo)
 );
 
--- 1.11 Tabla ENVIO_CARGA
 CREATE TABLE ENVIO_CARGA (
     id_envio   INT PRIMARY KEY,
     id_vuelo   INT NOT NULL,
@@ -141,7 +120,6 @@ CREATE TABLE ENVIO_CARGA (
     FOREIGN KEY (id_cliente) REFERENCES CLIENTE_CORPORATIVO(id_cliente)
 );
 
--- 1.12 Tabla CUENTA_NEXO_PUNTOS (Relación 1:1 con PASAJERO mediante FK UNIQUE)
 CREATE TABLE CUENTA_NEXO_PUNTOS (
     id_cuenta    INT PRIMARY KEY,
     id_pasajero  INT NOT NULL UNIQUE,
@@ -151,7 +129,6 @@ CREATE TABLE CUENTA_NEXO_PUNTOS (
     FOREIGN KEY (id_pasajero) REFERENCES PASAJERO(id_pasajero)
 );
 
--- 1.13 Tabla MOVIMIENTO_PUNTOS (id_pasaje admite NULL en bonificaciones)
 CREATE TABLE MOVIMIENTO_PUNTOS (
     id_movimiento INT PRIMARY KEY,
     id_cuenta     INT NOT NULL,
@@ -163,14 +140,12 @@ CREATE TABLE MOVIMIENTO_PUNTOS (
     FOREIGN KEY (id_pasaje) REFERENCES PASAJE(id_pasaje)
 );
 
--- 1.14 Tabla CAUSA_DEMORA
 CREATE TABLE CAUSA_DEMORA (
     codigo_causa VARCHAR(10) PRIMARY KEY,
     descripcion  VARCHAR(150) NOT NULL,
     categoria    VARCHAR(30) NOT NULL
 );
 
--- 1.15 Tabla EVENTO_DEMORA (es_propagada = 1 indica Efecto Dominó)
 CREATE TABLE EVENTO_DEMORA (
     id_evento     INT PRIMARY KEY,
     id_vuelo      INT NOT NULL,
@@ -182,7 +157,6 @@ CREATE TABLE EVENTO_DEMORA (
     FOREIGN KEY (codigo_causa) REFERENCES CAUSA_DEMORA(codigo_causa)
 );
 
--- 1.16 Tabla OBSERVACION_METEO
 CREATE TABLE OBSERVACION_METEO (
     id_observacion   INT PRIMARY KEY,
     id_aeropuerto    INT NOT NULL,
@@ -195,7 +169,6 @@ CREATE TABLE OBSERVACION_METEO (
     FOREIGN KEY (id_aeropuerto) REFERENCES AEROPUERTO(id_aeropuerto)
 );
 
--- 1.17 Tabla PREDICCION_DEMORA (prob_demora entre 0 y 1)
 CREATE TABLE PREDICCION_DEMORA (
     id_prediccion     INT PRIMARY KEY,
     id_vuelo          INT NOT NULL,
@@ -206,7 +179,6 @@ CREATE TABLE PREDICCION_DEMORA (
     FOREIGN KEY (id_vuelo) REFERENCES VUELO(id_vuelo)
 );
 
--- 1.18 Tabla NOTIFICACION
 CREATE TABLE NOTIFICACION (
     id_notificacion INT PRIMARY KEY,
     id_prediccion   INT NOT NULL,
@@ -218,4 +190,3 @@ CREATE TABLE NOTIFICACION (
     FOREIGN KEY (id_pasajero) REFERENCES PASAJERO(id_pasajero)
 );
 GO
-
