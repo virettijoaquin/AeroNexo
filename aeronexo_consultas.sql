@@ -183,10 +183,42 @@ BEGIN
 END;
 GO
 
--- Permisos de rol operador
+-- Vista de seguridad para ocultar datos sensibles del pasajero (documento, email y telefono)
+CREATE OR ALTER VIEW vista_pasajeros_segura AS
+SELECT id_pasajero, nombre, apellido
+FROM PASAJERO;
+GO
+
+-- Vista de seguridad por area solo para comandantes
+CREATE OR ALTER VIEW vista_comandantes AS
+SELECT nombre, apellido, rol
+FROM TRIPULANTE
+WHERE rol = 'Comandante';
+GO
+
+-- Creacion de roles segun tipos de usuarios
 IF DATABASE_PRINCIPAL_ID('operador_vuelos') IS NULL
     CREATE ROLE operador_vuelos;
 
-GRANT SELECT, INSERT, DELETE ON VUELO TO operador_vuelos;
-REVOKE INSERT, DELETE ON VUELO FROM operador_vuelos;
+IF DATABASE_PRINCIPAL_ID('atencion_pasajero') IS NULL
+    CREATE ROLE atencion_pasajero;
+
+IF DATABASE_PRINCIPAL_ID('analista_consultas') IS NULL
+    CREATE ROLE analista_consultas;
+GO
+
+-- Otorgar permisos (GRANT)
+GRANT SELECT, INSERT, UPDATE, DELETE ON VUELO TO operador_vuelos;
+GRANT SELECT, INSERT ON EVENTO_DEMORA TO operador_vuelos;
+
+GRANT SELECT ON vista_pasajeros_segura TO atencion_pasajero;
+GRANT SELECT, INSERT, UPDATE ON RESERVA TO atencion_pasajero;
+
+GRANT SELECT ON vista_comandantes TO analista_consultas;
+GRANT SELECT ON PREDICCION_DEMORA TO analista_consultas;
+
+-- Revocar permisos de modificacion y borrado (REVOKE)
+REVOKE DELETE ON VUELO FROM operador_vuelos;
+REVOKE INSERT, UPDATE, DELETE ON PASAJERO FROM atencion_pasajero;
+REVOKE INSERT, DELETE ON PREDICCION_DEMORA FROM analista_consultas;
 GO
