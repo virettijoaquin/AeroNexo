@@ -94,4 +94,30 @@ INSERT INTO NOTIFICACION (id_notificacion, id_prediccion, id_pasajero, canal, en
 (1, 1, 1, 'App Push', '2026-11-18 07:11:00', 'Enviada'),
 (2, 1, 2, 'Email', '2026-11-18 07:11:00', 'Enviada'),
 (3, 2, 3, 'SMS', '2026-11-18 08:41:00', 'Enviada');
+
+INSERT INTO CONFIGURACION_PREDICCION (
+    id_config, umbral_demora_severa_min, umbral_demora_leve_min,
+    umbral_visibilidad_baja_m, umbral_visibilidad_med_m,
+    umbral_viento_fuerte_kt, umbral_viento_med_kt, umbral_precipitacion_mm,
+    umbral_prob_alta, umbral_prob_media, factor_descuento_corp, factor_millas_km,
+    txt_estado_demorado, txt_estado_en_horario, txt_estado_reprogramado,
+    txt_estado_programado, txt_estado_cancelado,
+    txt_demora_original, txt_demora_domino,
+    txt_ruta_frecuente, txt_ruta_moderada, txt_ruta_puntual,
+    txt_clima_severo, txt_clima_moderado, txt_clima_favorable,
+    txt_recom_postergar, txt_recom_atencion, txt_recom_puntual, activa
+) VALUES (
+    1, 30, 15,
+    2000, 5000,
+    30, 20, 10.00,
+    0.70, 0.40, 0.90, 1.50,
+    'Demorado', 'En Horario', 'Reprogramado',
+    'Programado', 'Cancelado',
+    'Demora original', 'Efecto domino',
+    'Demora Frecuente', 'Demora Moderada', 'Ruta Puntual',
+    'Alta Probabilidad de Demora por Clima', 'Demora Leve Posible por Clima', 'Clima Favorable (Sin Demora)',
+    'Demora Anticipada: Postergar salida hacia el aeropuerto',
+    'Atencion: Posible demora moderada, revisar notificaciones',
+    'Vuelo Puntual: Concurrir al aeropuerto en horario habitual', 1
+);
 GO

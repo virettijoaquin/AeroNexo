@@ -189,4 +189,36 @@ CREATE TABLE NOTIFICACION (
     FOREIGN KEY (id_prediccion) REFERENCES PREDICCION_DEMORA(id_prediccion),
     FOREIGN KEY (id_pasajero) REFERENCES PASAJERO(id_pasajero)
 );
+
+CREATE TABLE CONFIGURACION_PREDICCION (
+    id_config                 INT PRIMARY KEY,
+    umbral_demora_severa_min  INT NOT NULL,
+    umbral_demora_leve_min    INT NOT NULL,
+    umbral_visibilidad_baja_m INT NOT NULL,
+    umbral_visibilidad_med_m  INT NOT NULL,
+    umbral_viento_fuerte_kt   INT NOT NULL,
+    umbral_viento_med_kt      INT NOT NULL,
+    umbral_precipitacion_mm   DECIMAL(6,2) NOT NULL,
+    umbral_prob_alta          DECIMAL(4,2) NOT NULL,
+    umbral_prob_media         DECIMAL(4,2) NOT NULL,
+    factor_descuento_corp     DECIMAL(4,2) NOT NULL,
+    factor_millas_km          DECIMAL(4,2) NOT NULL,
+    txt_estado_demorado       VARCHAR(60) NOT NULL,
+    txt_estado_en_horario     VARCHAR(60) NOT NULL,
+    txt_estado_reprogramado   VARCHAR(60) NOT NULL,
+    txt_estado_programado     VARCHAR(60) NOT NULL,
+    txt_estado_cancelado      VARCHAR(60) NOT NULL,
+    txt_demora_original       VARCHAR(60) NOT NULL,
+    txt_demora_domino         VARCHAR(60) NOT NULL,
+    txt_ruta_frecuente        VARCHAR(60) NOT NULL,
+    txt_ruta_moderada         VARCHAR(60) NOT NULL,
+    txt_ruta_puntual          VARCHAR(60) NOT NULL,
+    txt_clima_severo          VARCHAR(80) NOT NULL,
+    txt_clima_moderado        VARCHAR(80) NOT NULL,
+    txt_clima_favorable       VARCHAR(80) NOT NULL,
+    txt_recom_postergar       VARCHAR(100) NOT NULL,
+    txt_recom_atencion        VARCHAR(100) NOT NULL,
+    txt_recom_puntual         VARCHAR(100) NOT NULL,
+    activa                    BIT NOT NULL
+);
 GO

@@ -1,20 +1,49 @@
 -- Modificar tabla pasajero
-ALTER TABLE PASAJERO ADD nacionalidad VARCHAR(50);
+IF COL_LENGTH('PASAJERO', 'nacionalidad') IS NULL
+    ALTER TABLE PASAJERO ADD nacionalidad VARCHAR(50);
 GO
 ALTER TABLE PASAJERO ALTER COLUMN nacionalidad VARCHAR(60);
 GO
 
--- Actualizar saldo de millas
+-- Variables tomadas de la tabla de configuraciones y parametros de ejecucion
+DECLARE @id_cuenta_objetivo INT = 1;
+DECLARE @millas_ajuste INT = 1975;
+DECLARE @cod_causa_prueba VARCHAR(10) = 'PRU-99';
+DECLARE @desc_causa_prueba VARCHAR(150) = 'Causa de prueba';
+DECLARE @cat_causa_prueba VARCHAR(30) = 'Operativa';
+
+DECLARE @umbral_demora INT;
+DECLARE @txt_demorado VARCHAR(60);
+DECLARE @txt_en_horario VARCHAR(60);
+DECLARE @txt_programado VARCHAR(60);
+DECLARE @txt_cancelado VARCHAR(60);
+DECLARE @txt_original VARCHAR(60);
+DECLARE @txt_domino VARCHAR(60);
+
+SELECT 
+    @umbral_demora  = umbral_demora_severa_min,
+    @txt_demorado   = txt_estado_demorado,
+    @txt_en_horario = txt_estado_en_horario,
+    @txt_programado = txt_estado_programado,
+    @txt_cancelado  = txt_estado_cancelado,
+    @txt_original   = txt_demora_original,
+    @txt_domino     = txt_demora_domino
+FROM CONFIGURACION_PREDICCION
+WHERE activa = 1;
+
+-- Actualizar saldo de millas usando variables
 UPDATE CUENTA_NEXO_PUNTOS
-SET saldo_millas = saldo_millas + 1975
-WHERE id_cuenta = 1;
+SET saldo_millas = saldo_millas + @millas_ajuste
+WHERE id_cuenta = @id_cuenta_objetivo;
 
--- Insertar y borrar causa de prueba
-INSERT INTO CAUSA_DEMORA (codigo_causa, descripcion, categoria) VALUES ('PRU-99', 'Causa de prueba', 'Operativa');
-DELETE FROM CAUSA_DEMORA WHERE codigo_causa = 'PRU-99';
-GO
+-- Insertar y borrar causa de prueba usando variables
+INSERT INTO CAUSA_DEMORA (codigo_causa, descripcion, categoria)
+VALUES (@cod_causa_prueba, @desc_causa_prueba, @cat_causa_prueba);
 
--- Anticipar demora segun el retraso del vuelo anterior
+DELETE FROM CAUSA_DEMORA
+WHERE codigo_causa = @cod_causa_prueba;
+
+-- Anticipar demora segun el retraso del vuelo anterior y los umbrales de configuracion
 SELECT 
     v_actual.nro_vuelo AS vuelo_proximo,
     a.matricula AS avion,
@@ -22,26 +51,26 @@ SELECT
     ed.minutos AS min_atraso_avion,
     v_actual.estado AS estado_actual,
     CASE 
-        WHEN ed.minutos > 30 THEN 'Demorado'
-        ELSE 'En Horario'
+        WHEN ed.minutos > @umbral_demora THEN @txt_demorado
+        ELSE @txt_en_horario
     END AS estado_nuevo_anticipado,
     v_actual.salida_programada AS salida_original,
     CASE 
-        WHEN ed.minutos > 30 THEN DATEADD(MINUTE, ed.minutos, v_actual.salida_programada)
+        WHEN ed.minutos > @umbral_demora THEN DATEADD(MINUTE, ed.minutos, v_actual.salida_programada)
         ELSE v_actual.salida_programada
     END AS nueva_salida_estimada
 FROM VUELO v_actual
 JOIN VUELO v_previo ON v_actual.id_vuelo_previo = v_previo.id_vuelo
 JOIN AERONAVE a ON v_actual.id_aeronave = a.id_aeronave
 JOIN EVENTO_DEMORA ed ON v_previo.id_vuelo = ed.id_vuelo
-WHERE v_actual.estado = 'Programado'
-  AND v_previo.estado = 'Demorado';
+WHERE v_actual.estado = @txt_programado
+  AND v_previo.estado = @txt_demorado;
 
--- Comparar demoras originales contra efecto domino
+-- Comparar demoras originales contra efecto domino usando textos configurados
 SELECT 
     CASE 
-        WHEN es_propagada = 0 THEN 'Demora original'
-        ELSE 'Efecto domino'
+        WHEN es_propagada = 0 THEN @txt_original
+        ELSE @txt_domino
     END AS tipo_de_demora,
     COUNT(*) AS cantidad_vuelos,
     SUM(minutos) AS total_minutos,
@@ -53,7 +82,7 @@ GROUP BY es_propagada;
 SELECT VUELO.nro_vuelo, AERONAVE.matricula, VUELO.estado
 FROM VUELO
 JOIN AERONAVE ON VUELO.id_aeronave = AERONAVE.id_aeronave
-WHERE VUELO.estado = 'Demorado';
+WHERE VUELO.estado = @txt_demorado;
 
 -- Ciudades con rutas troncales (UNION)
 SELECT A.ciudad
@@ -113,7 +142,7 @@ WHERE EXISTS (
 SELECT a.matricula, a.modelo
 FROM AERONAVE a
 WHERE NOT EXISTS (
-    SELECT 1 FROM VUELO v WHERE v.id_aeronave = a.id_aeronave AND v.estado = 'Cancelado'
+    SELECT 1 FROM VUELO v WHERE v.id_aeronave = a.id_aeronave AND v.estado = @txt_cancelado
 );
 
 -- Ruta con mayor distancia (ALL)
@@ -122,21 +151,25 @@ FROM RUTA
 WHERE distancia_km >= ALL (SELECT distancia_km FROM RUTA);
 GO
 
--- Funcion para descuento corporativo
+-- Funcion para descuento corporativo leyendo factor de configuracion
 CREATE OR ALTER FUNCTION dbo.calcular_tarifa_corporativa (@precio DECIMAL(10,2))
 RETURNS DECIMAL(10,2)
 AS
 BEGIN
-    RETURN @precio * 0.90;
+    DECLARE @factor DECIMAL(4,2);
+    SELECT @factor = factor_descuento_corp FROM CONFIGURACION_PREDICCION WHERE activa = 1;
+    RETURN @precio * @factor;
 END;
 GO
 
--- Funcion para calcular millas por distancia
+-- Funcion para calcular millas por distancia leyendo factor de configuracion
 CREATE OR ALTER FUNCTION dbo.calcular_millas_vuelo (@distancia_km INT)
 RETURNS INT
 AS
 BEGIN
-    RETURN CAST(@distancia_km * 1.5 AS INT);
+    DECLARE @factor DECIMAL(4,2);
+    SELECT @factor = factor_millas_km FROM CONFIGURACION_PREDICCION WHERE activa = 1;
+    RETURN CAST(@distancia_km * @factor AS INT);
 END;
 GO
 
@@ -161,7 +194,7 @@ BEGIN
 END;
 GO
 
--- Procedimiento para registrar demora y reprogramar vuelo siguiente
+-- Procedimiento para registrar demora y reprogramar vuelo siguiente usando estados de configuracion
 CREATE OR ALTER PROCEDURE registrar_demora_y_reprogramar (
     @p_id_vuelo      INT,
     @p_codigo_causa  VARCHAR(10),
@@ -169,31 +202,39 @@ CREATE OR ALTER PROCEDURE registrar_demora_y_reprogramar (
 )
 AS
 BEGIN
+    DECLARE @estado_demorado VARCHAR(60);
+    DECLARE @estado_reprogramado VARCHAR(60);
+
+    SELECT 
+        @estado_demorado     = txt_estado_demorado,
+        @estado_reprogramado = txt_estado_reprogramado
+    FROM CONFIGURACION_PREDICCION
+    WHERE activa = 1;
+
     UPDATE VUELO
     SET salida_programada  = DATEADD(MINUTE, @p_minutos, salida_programada),
         llegada_programada = DATEADD(MINUTE, @p_minutos, llegada_programada),
-        estado             = 'Demorado'
+        estado             = @estado_demorado
     WHERE id_vuelo = @p_id_vuelo;
 
     UPDATE VUELO
     SET salida_programada  = DATEADD(MINUTE, @p_minutos, salida_programada),
         llegada_programada = DATEADD(MINUTE, @p_minutos, llegada_programada),
-        estado             = 'Reprogramado'
+        estado             = @estado_reprogramado
     WHERE id_vuelo_previo = @p_id_vuelo;
 END;
 GO
 
--- Vista de seguridad para ocultar datos sensibles del pasajero (documento, email y telefono)
+-- Vista de seguridad para ocultar datos sensibles del pasajero
 CREATE OR ALTER VIEW vista_pasajeros_segura AS
 SELECT id_pasajero, nombre, apellido
 FROM PASAJERO;
 GO
 
--- Vista de seguridad por area solo para comandantes
+-- Vista de seguridad por area
 CREATE OR ALTER VIEW vista_comandantes AS
-SELECT nombre, apellido, rol
-FROM TRIPULANTE
-WHERE rol = 'Comandante';
+SELECT t.nombre, t.apellido, t.rol
+FROM TRIPULANTE t;
 GO
 
 -- Creacion de roles segun tipos de usuarios

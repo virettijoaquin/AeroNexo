@@ -1,4 +1,4 @@
-CREATE VIEW vista_demora_promedio_por_ruta AS
+CREATE OR ALTER VIEW vista_demora_promedio_por_ruta AS
 SELECT 
     r.id_ruta,
     ao.codigo_iata AS origen,
@@ -8,19 +8,23 @@ SELECT
     COUNT(v.id_vuelo) AS vuelos_evaluados,
     ISNULL(AVG(ed.minutos), 0) AS promedio_minutos_demora,
     CASE 
-        WHEN ISNULL(AVG(ed.minutos), 0) > 30 THEN 'Demora Frecuente'
-        WHEN ISNULL(AVG(ed.minutos), 0) > 15 THEN 'Demora Moderada'
-        ELSE 'Ruta Puntual'
+        WHEN ISNULL(AVG(ed.minutos), 0) > cfg.umbral_demora_severa_min THEN cfg.txt_ruta_frecuente
+        WHEN ISNULL(AVG(ed.minutos), 0) > cfg.umbral_demora_leve_min THEN cfg.txt_ruta_moderada
+        ELSE cfg.txt_ruta_puntual
     END AS comportamiento_historico
 FROM RUTA r
 JOIN AEROPUERTO ao ON r.id_aerop_origen = ao.id_aeropuerto
 JOIN AEROPUERTO ad ON r.id_aerop_destino = ad.id_aeropuerto
+JOIN CONFIGURACION_PREDICCION cfg ON cfg.activa = 1
 LEFT JOIN VUELO v ON r.id_ruta = v.id_ruta
 LEFT JOIN EVENTO_DEMORA ed ON v.id_vuelo = ed.id_vuelo
-GROUP BY r.id_ruta, ao.codigo_iata, ao.ciudad, ad.codigo_iata, ad.ciudad;
+GROUP BY 
+    r.id_ruta, ao.codigo_iata, ao.ciudad, ad.codigo_iata, ad.ciudad,
+    cfg.umbral_demora_severa_min, cfg.umbral_demora_leve_min,
+    cfg.txt_ruta_frecuente, cfg.txt_ruta_moderada, cfg.txt_ruta_puntual;
 GO
 
-CREATE VIEW vista_prediccion_por_vuelo_anterior AS
+CREATE OR ALTER VIEW vista_prediccion_por_vuelo_anterior AS
 SELECT 
     v_actual.id_vuelo,
     v_actual.nro_vuelo,
@@ -31,20 +35,21 @@ SELECT
     ISNULL(ed.minutos, 0) AS minutos_atraso_avion,
     v_actual.salida_programada AS salida_original,
     CASE 
-        WHEN ISNULL(ed.minutos, 0) > 30 THEN DATEADD(MINUTE, ed.minutos, v_actual.salida_programada)
+        WHEN ISNULL(ed.minutos, 0) > cfg.umbral_demora_severa_min THEN DATEADD(MINUTE, ed.minutos, v_actual.salida_programada)
         ELSE v_actual.salida_programada
     END AS nueva_salida_estimada,
     CASE 
-        WHEN ISNULL(ed.minutos, 0) > 30 THEN 'Demorado por Vuelo Anterior'
-        ELSE 'En Horario'
+        WHEN ISNULL(ed.minutos, 0) > cfg.umbral_demora_severa_min THEN cfg.txt_estado_demorado
+        ELSE cfg.txt_estado_en_horario
     END AS estado_anticipado
 FROM VUELO v_actual
 JOIN AERONAVE a ON v_actual.id_aeronave = a.id_aeronave
+JOIN CONFIGURACION_PREDICCION cfg ON cfg.activa = 1
 LEFT JOIN VUELO v_previo ON v_actual.id_vuelo_previo = v_previo.id_vuelo
 LEFT JOIN EVENTO_DEMORA ed ON v_previo.id_vuelo = ed.id_vuelo;
 GO
 
-CREATE VIEW vista_riesgo_clima_vuelo AS
+CREATE OR ALTER VIEW vista_riesgo_clima_vuelo AS
 SELECT 
     v.id_vuelo,
     v.nro_vuelo,
@@ -56,18 +61,24 @@ SELECT
     om.viento_kt,
     om.precipitacion_mm,
     CASE 
-        WHEN om.visibilidad_m < 2000 OR om.viento_kt >= 30 OR om.precipitacion_mm >= 10 THEN 'Alta Probabilidad de Demora por Clima'
-        WHEN om.visibilidad_m < 5000 OR om.viento_kt >= 20 THEN 'Demora Leve Posible por Clima'
-        ELSE 'Clima Favorable (Sin Demora)'
+        WHEN om.visibilidad_m < cfg.umbral_visibilidad_baja_m 
+          OR om.viento_kt >= cfg.umbral_viento_fuerte_kt 
+          OR om.precipitacion_mm >= cfg.umbral_precipitacion_mm 
+            THEN cfg.txt_clima_severo
+        WHEN om.visibilidad_m < cfg.umbral_visibilidad_med_m 
+          OR om.viento_kt >= cfg.umbral_viento_med_kt 
+            THEN cfg.txt_clima_moderado
+        ELSE cfg.txt_clima_favorable
     END AS pronostico_operativo_clima
 FROM VUELO v
 JOIN RUTA r ON v.id_ruta = r.id_ruta
 JOIN AEROPUERTO ao ON r.id_aerop_origen = ao.id_aeropuerto
 JOIN OBSERVACION_METEO om ON ao.id_aeropuerto = om.id_aeropuerto
+JOIN CONFIGURACION_PREDICCION cfg ON cfg.activa = 1
 WHERE CAST(om.fecha_hora AS DATE) = v.fecha;
 GO
 
-CREATE VIEW vista_tablero_pasajero_prediccion AS
+CREATE OR ALTER VIEW vista_tablero_pasajero_prediccion AS
 SELECT 
     p.id_pasajero,
     p.nombre,
@@ -89,11 +100,12 @@ SELECT
         WHERE v2.id_ruta = v.id_ruta
     ) AS promedio_historico_ruta_min,
     CASE 
-        WHEN ISNULL(pd.prob_demora, 0) >= 0.70 OR ISNULL(pd.minutos_estimados, 0) > 30 
-            THEN 'Demora Anticipada: Postergar salida hacia el aeropuerto'
-        WHEN ISNULL(pd.prob_demora, 0) >= 0.40 
-            THEN 'Atencion: Posible demora moderada, revisar notificaciones'
-        ELSE 'Vuelo Puntual: Concurrir al aeropuerto en horario habitual'
+        WHEN ISNULL(pd.prob_demora, 0) >= cfg.umbral_prob_alta 
+          OR ISNULL(pd.minutos_estimados, 0) > cfg.umbral_demora_severa_min 
+            THEN cfg.txt_recom_postergar
+        WHEN ISNULL(pd.prob_demora, 0) >= cfg.umbral_prob_media 
+            THEN cfg.txt_recom_atencion
+        ELSE cfg.txt_recom_puntual
     END AS recomendacion_viajero
 FROM PASAJE psj
 JOIN RESERVA res ON psj.id_reserva = res.id_reserva
@@ -102,5 +114,6 @@ JOIN VUELO v ON psj.id_vuelo = v.id_vuelo
 JOIN RUTA r ON v.id_ruta = r.id_ruta
 JOIN AEROPUERTO ao ON r.id_aerop_origen = ao.id_aeropuerto
 JOIN AEROPUERTO ad ON r.id_aerop_destino = ad.id_aeropuerto
+JOIN CONFIGURACION_PREDICCION cfg ON cfg.activa = 1
 LEFT JOIN PREDICCION_DEMORA pd ON v.id_vuelo = pd.id_vuelo;
 GO
